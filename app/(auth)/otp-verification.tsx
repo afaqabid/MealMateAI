@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -11,31 +12,44 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useAuth } from "../../context/AuthContext";
+import { pendingEmail } from "./register";
 
 const OTP_LENGTH = 6;
 
 export default function OtpVerificationScreen() {
+    const { verifyOtp } = useAuth();
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
     const [timer, setTimer] = useState(59);
     const [canResend, setCanResend] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
     const inputs = useRef<(TextInput | null)[]>([]);
 
-    // Countdown timer
     useEffect(() => {
-        if (timer === 0) {
-            setCanResend(true);
-            return;
-        }
+        if (timer === 0) { setCanResend(true); return; }
         const interval = setInterval(() => setTimer((t) => t - 1), 1000);
         return () => clearInterval(interval);
     }, [timer]);
 
-    const handleChange = (value: string, index: number) => {
+    const handleChange = (val: string, index: number) => {
+        // Paste: distribute all digits across boxes from current index
+        if (val.length > 1) {
+            const digits = val.replace(/\D/g, "").slice(0, OTP_LENGTH);
+            const newOtp = [...otp];
+            digits.split("").forEach((char, i) => {
+                if (index + i < OTP_LENGTH) newOtp[index + i] = char;
+            });
+            setOtp(newOtp);
+            const nextFocus = Math.min(index + digits.length, OTP_LENGTH - 1);
+            inputs.current[nextFocus]?.focus();
+            return;
+        }
+        // Normal single-digit typing
         const newOtp = [...otp];
-        newOtp[index] = value;
+        newOtp[index] = val;
         setOtp(newOtp);
-        // Auto-advance to next box
-        if (value && index < OTP_LENGTH - 1) {
+        if (val && index < OTP_LENGTH - 1) {
             inputs.current[index + 1]?.focus();
         }
     };
@@ -47,16 +61,25 @@ export default function OtpVerificationScreen() {
     };
 
     const handleResend = () => {
-        // TODO: Wire up resend OTP logic
         setOtp(Array(OTP_LENGTH).fill(""));
         setTimer(59);
         setCanResend(false);
+        setError(null);
         inputs.current[0]?.focus();
+        // TODO: call supabase.auth.resend({ type: 'signup', email: pendingEmail })
     };
 
-    const handleVerify = () => {
-        // TODO: Wire up OTP verification logic
-        router.replace("/(tabs)/dashboard");
+    const handleVerify = async () => {
+        const token = otp.join("");
+        setError(null);
+        setLoading(true);
+        const err = await verifyOtp(pendingEmail, token);
+        setLoading(false);
+        if (err) {
+            setError(err);
+        } else {
+            router.replace("/(tabs)/dashboard");
+        }
     };
 
     const isComplete = otp.every((d) => d !== "");
@@ -81,32 +104,43 @@ export default function OtpVerificationScreen() {
 
                 {/* Header */}
                 <View className="items-center px-6 pb-8 pt-4">
-                    <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl bg-blue-100">
-                        <Ionicons name="shield-checkmark-outline" size={32} color="#2563EB" />
+                    <View className="mb-5 items-center justify-center">
+                        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-blue-600" style={{ elevation: 6 }}>
+                            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-blue-500">
+                                <Text style={{ fontSize: 32 }}>🍽️</Text>
+                            </View>
+                        </View>
+                        <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-white">
+                            <Text style={{ fontSize: 12 }}>✨</Text>
+                        </View>
                     </View>
                     <Text className="text-3xl font-bold text-gray-900">
                         Verify your email
                     </Text>
                     <Text className="mt-2 text-center text-sm text-gray-400">
-                        We sent a 6-digit code to your email.{"\n"}Enter it below to confirm
-                        your account.
+                        We sent a 6-digit code to{"\n"}
+                        <Text className="font-medium text-gray-700">{pendingEmail}</Text>
                     </Text>
                 </View>
 
                 <View className="flex-1 px-6">
+                    {/* Error banner */}
+                    {error && (
+                        <View className="mb-4 flex-row items-center rounded-xl bg-red-50 px-4 py-3">
+                            <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                            <Text className="ml-2 flex-1 text-sm text-red-600">{error}</Text>
+                        </View>
+                    )}
+
                     {/* OTP Boxes */}
                     <View className="mb-8 flex-row justify-between">
                         {Array.from({ length: OTP_LENGTH }).map((_, index) => (
                             <TextInput
                                 key={index}
-                                ref={(ref) => {
-                                    inputs.current[index] = ref;
-                                }}
-                                className={`h-14 w-12 rounded-xl border bg-gray-50 text-center text-xl font-bold text-gray-900 ${otp[index]
-                                        ? "border-blue-500 bg-blue-50"
-                                        : "border-gray-200"
+                                ref={(ref) => { inputs.current[index] = ref; }}
+                                className={`h-14 w-12 rounded-xl border bg-gray-50 text-center text-xl font-bold text-gray-900 ${otp[index] ? "border-blue-500 bg-blue-50" : "border-gray-200"
                                     }`}
-                                maxLength={1}
+                                maxLength={OTP_LENGTH}
                                 keyboardType="number-pad"
                                 value={otp[index]}
                                 onChangeText={(val) => handleChange(val, index)}
@@ -118,30 +152,27 @@ export default function OtpVerificationScreen() {
 
                     {/* Verify button */}
                     <TouchableOpacity
-                        className={`items-center rounded-xl py-4 ${isComplete ? "bg-blue-600" : "bg-gray-200"
+                        className={`items-center rounded-xl py-4 ${isComplete && !loading ? "bg-blue-600" : "bg-gray-200"
                             }`}
                         onPress={handleVerify}
-                        disabled={!isComplete}
+                        disabled={!isComplete || loading}
                         activeOpacity={0.85}
                     >
-                        <Text
-                            className={`text-base font-semibold ${isComplete ? "text-white" : "text-gray-400"
-                                }`}
-                        >
-                            Verify Account
-                        </Text>
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text className={`text-base font-semibold ${isComplete ? "text-white" : "text-gray-400"}`}>
+                                Verify Account
+                            </Text>
+                        )}
                     </TouchableOpacity>
 
                     {/* Resend */}
                     <View className="mt-6 flex-row items-center justify-center">
-                        <Text className="text-sm text-gray-500">
-                            Didn't receive the code?{" "}
-                        </Text>
+                        <Text className="text-sm text-gray-500">Didn't receive the code? </Text>
                         {canResend ? (
                             <TouchableOpacity onPress={handleResend}>
-                                <Text className="text-sm font-semibold text-blue-600">
-                                    Resend
-                                </Text>
+                                <Text className="text-sm font-semibold text-blue-600">Resend</Text>
                             </TouchableOpacity>
                         ) : (
                             <Text className="text-sm font-medium text-gray-400">

@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -12,15 +13,30 @@ import {
     View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { useAuth } from "../../context/AuthContext";
 
 export default function LoginScreen() {
+    const { signIn } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const handleLogin = () => {
-        // TODO: Wire up auth logic
-        router.replace("/(tabs)/dashboard");
+    const handleLogin = async () => {
+        if (!email || !password) {
+            setError("Please fill in all fields.");
+            return;
+        }
+        setError(null);
+        setLoading(true);
+        const err = await signIn(email, password);
+        setLoading(false);
+        if (err) {
+            setError(err);
+        } else {
+            router.replace("/(tabs)/dashboard");
+        }
     };
 
     return (
@@ -35,9 +51,16 @@ export default function LoginScreen() {
             >
                 {/* Header */}
                 <View className="items-center px-6 pb-6 pt-20">
-                    {/* Logo mark */}
-                    <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl bg-blue-600">
-                        <Ionicons name="nutrition" size={34} color="#fff" />
+                    {/* Branded logo */}
+                    <View className="mb-5 items-center justify-center">
+                        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-blue-600" style={{ elevation: 6 }}>
+                            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-blue-500">
+                                <Text style={{ fontSize: 32 }}>🍽️</Text>
+                            </View>
+                        </View>
+                        <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-white">
+                            <Text style={{ fontSize: 12 }}>✨</Text>
+                        </View>
                     </View>
                     <Text className="text-3xl font-bold text-gray-900">
                         Welcome back 👋
@@ -49,6 +72,14 @@ export default function LoginScreen() {
 
                 {/* Form */}
                 <View className="flex-1 px-6">
+                    {/* Error banner */}
+                    {error && (
+                        <View className="mb-4 flex-row items-center rounded-xl bg-red-50 px-4 py-3">
+                            <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                            <Text className="ml-2 flex-1 text-sm text-red-600">{error}</Text>
+                        </View>
+                    )}
+
                     {/* Email */}
                     <View className="mb-4">
                         <Text className="mb-1.5 text-sm font-medium text-gray-700">
@@ -105,11 +136,16 @@ export default function LoginScreen() {
 
                     {/* Login button */}
                     <TouchableOpacity
-                        className="items-center rounded-xl bg-blue-600 py-4"
+                        className={`items-center rounded-xl py-4 ${loading ? "bg-blue-400" : "bg-blue-600"}`}
                         onPress={handleLogin}
+                        disabled={loading}
                         activeOpacity={0.85}
                     >
-                        <Text className="text-base font-semibold text-white">Sign In</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text className="text-base font-semibold text-white">Sign In</Text>
+                        )}
                     </TouchableOpacity>
 
                     {/* Divider */}
@@ -130,7 +166,6 @@ export default function LoginScreen() {
                             elevation: 1,
                         }}
                     >
-                        {/* Official Google G SVG */}
                         <Svg width={20} height={20} viewBox="0 0 48 48">
                             <Path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
                             <Path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />

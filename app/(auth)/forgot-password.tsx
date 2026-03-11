@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -11,14 +12,26 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useAuth } from "../../context/AuthContext";
 
 export default function ForgotPasswordScreen() {
+    const { resetPassword } = useAuth();
     const [email, setEmail] = useState("");
     const [sent, setSent] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const handleSend = () => {
-        // TODO: Wire up password reset logic
-        setSent(true);
+    const handleSend = async () => {
+        if (!email) { setError("Please enter your email address."); return; }
+        setError(null);
+        setLoading(true);
+        const err = await resetPassword(email);
+        setLoading(false);
+        if (err) {
+            setError(err);
+        } else {
+            setSent(true);
+        }
     };
 
     return (
@@ -55,6 +68,14 @@ export default function ForgotPasswordScreen() {
                 <View className="flex-1 px-6">
                     {!sent ? (
                         <>
+                            {/* Error banner */}
+                            {error && (
+                                <View className="mb-4 flex-row items-center rounded-xl bg-red-50 px-4 py-3">
+                                    <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                                    <Text className="ml-2 flex-1 text-sm text-red-600">{error}</Text>
+                                </View>
+                            )}
+
                             {/* Email input */}
                             <Text className="mb-1.5 text-sm font-medium text-gray-700">
                                 Email address
@@ -74,24 +95,25 @@ export default function ForgotPasswordScreen() {
 
                             {/* Send button */}
                             <TouchableOpacity
-                                className="items-center rounded-xl bg-orange-500 py-4"
+                                className={`items-center rounded-xl py-4 ${loading ? "bg-orange-300" : "bg-orange-500"}`}
                                 onPress={handleSend}
+                                disabled={loading}
                                 activeOpacity={0.85}
                             >
-                                <Text className="text-base font-semibold text-white">
-                                    Send Reset Link
-                                </Text>
+                                {loading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text className="text-base font-semibold text-white">
+                                        Send Reset Link
+                                    </Text>
+                                )}
                             </TouchableOpacity>
                         </>
                     ) : (
                         /* Success state */
                         <View className="items-center rounded-2xl bg-green-50 px-6 py-8">
                             <View className="mb-4 h-14 w-14 items-center justify-center rounded-full bg-green-100">
-                                <Ionicons
-                                    name="checkmark-circle-outline"
-                                    size={32}
-                                    color="#16A34A"
-                                />
+                                <Ionicons name="checkmark-circle-outline" size={32} color="#16A34A" />
                             </View>
                             <Text className="text-lg font-semibold text-gray-800">
                                 Check your inbox!
@@ -100,7 +122,6 @@ export default function ForgotPasswordScreen() {
                                 We sent a reset link to{"\n"}
                                 <Text className="font-medium text-gray-800">{email}</Text>
                             </Text>
-
                             <TouchableOpacity
                                 className="mt-6 items-center rounded-xl bg-green-600 px-8 py-3.5"
                                 onPress={() => router.replace("/(auth)/login")}
@@ -113,7 +134,6 @@ export default function ForgotPasswordScreen() {
                         </View>
                     )}
 
-                    {/* Back to login */}
                     {!sent && (
                         <TouchableOpacity
                             className="mt-6 flex-row items-center justify-center"

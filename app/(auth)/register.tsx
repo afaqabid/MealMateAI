@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -11,20 +12,46 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useAuth } from "../../context/AuthContext";
+
+// Store email globally so OTP screen can read it
+export let pendingEmail = "";
 
 export default function RegisterScreen() {
+    const { signUp } = useAuth();
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const handleRegister = () => {
-        // TODO: Wire up registration logic
-        router.push("/(auth)/otp-verification");
+    const handleRegister = async () => {
+        if (!name || !email || !password || !confirmPassword) {
+            setError("Please fill in all fields.");
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError("Passwords do not match.");
+            return;
+        }
+        if (password.length < 8) {
+            setError("Password must be at least 8 characters.");
+            return;
+        }
+        setError(null);
+        setLoading(true);
+        const err = await signUp(email, password, name);
+        setLoading(false);
+        if (err) {
+            setError(err);
+        } else {
+            pendingEmail = email;
+            router.push("/(auth)/otp-verification");
+        }
     };
-
 
     return (
         <KeyboardAvoidingView
@@ -38,8 +65,15 @@ export default function RegisterScreen() {
             >
                 {/* Header */}
                 <View className="items-center px-6 pb-6 pt-16">
-                    <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl bg-blue-600">
-                        <Ionicons name="nutrition" size={34} color="#fff" />
+                    <View className="mb-5 items-center justify-center">
+                        <View className="h-20 w-20 items-center justify-center rounded-3xl bg-blue-600" style={{ elevation: 6 }}>
+                            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-blue-500">
+                                <Text style={{ fontSize: 32 }}>🍽️</Text>
+                            </View>
+                        </View>
+                        <View className="absolute -right-1 -top-1 h-5 w-5 items-center justify-center rounded-full bg-white">
+                            <Text style={{ fontSize: 12 }}>✨</Text>
+                        </View>
                     </View>
                     <Text className="text-3xl font-bold text-gray-900">
                         Create account ✨
@@ -51,6 +85,14 @@ export default function RegisterScreen() {
 
                 {/* Form */}
                 <View className="flex-1 px-6">
+                    {/* Error banner */}
+                    {error && (
+                        <View className="mb-4 flex-row items-center rounded-xl bg-red-50 px-4 py-3">
+                            <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                            <Text className="ml-2 flex-1 text-sm text-red-600">{error}</Text>
+                        </View>
+                    )}
+
                     {/* Full name */}
                     <View className="mb-4">
                         <Text className="mb-1.5 text-sm font-medium text-gray-700">
@@ -148,13 +190,18 @@ export default function RegisterScreen() {
 
                     {/* Register button */}
                     <TouchableOpacity
-                        className="items-center rounded-xl bg-blue-600 py-4"
+                        className={`items-center rounded-xl py-4 ${loading ? "bg-blue-400" : "bg-blue-600"}`}
                         onPress={handleRegister}
+                        disabled={loading}
                         activeOpacity={0.85}
                     >
-                        <Text className="text-base font-semibold text-white">
-                            Create Account
-                        </Text>
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text className="text-base font-semibold text-white">
+                                Create Account
+                            </Text>
+                        )}
                     </TouchableOpacity>
 
                     {/* Sign in link */}
